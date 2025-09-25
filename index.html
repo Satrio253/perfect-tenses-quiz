@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Perfect Tenses — Daily 10 Questions</title>
+  <style>
+    :root{font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+    body{max-width:820px;margin:28px auto;padding:20px;background:#fff;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.06);}
+    h1{font-size:1.35rem;margin:0 0 6px}
+    p.lead{color:#333;margin:6px 0 18px}
+    ol{padding-left:1.1rem}
+    li{margin:10px 0}
+    .answer{display:none;margin-top:6px;font-style:italic;color:#084;}
+    .controls{margin:18px 0;display:flex;gap:10px;align-items:center}
+    button{background:#0b74de;color:#fff;border:0;padding:8px 12px;border-radius:8px;cursor:pointer}
+    button.secondary{background:#666}
+    footer{margin-top:26px;color:#666;font-size:0.9rem}
+    pre{white-space:pre-wrap;background:#f7f7f7;padding:8px;border-radius:6px}
+    .meta{font-size:0.9rem;color:#444}
+  </style>
+</head>
+<body>
+  <h1>Perfect Tenses — Daily Quiz (10 of 30)</h1>
+  <p class="lead">This page contains 30 perfect-tense questions. Each day it shows 10 deterministic questions (same day = same 10). Answers are hidden — use the <strong>Show/Hide Answers</strong> button to self-check.</p>
+
+  <div class="controls">
+    <button id="toggleAnswers">Show Answers</button>
+    <div class="meta">Questions for: <span id="forDate"></span></div>
+  </div>
+
+  <ol id="questionsList" aria-live="polite"></ol>
+
+  <footer>
+    <div>How it works: The page uses today's local date to seed a small deterministic shuffle. Refreshing the page will show the same 10 questions during the same day, but tomorrow the selection changes automatically.</div>
+    <div style="margin-top:6px">You can copy this file to GitHub or open it locally. No internet required.</div>
+  </footer>
+
+  <script>
+    // ======= Question bank (30 items) =======
+    const bank = [
+      {q: "I _____ (eat) breakfast already.", a: "have eaten"},
+      {q: "She _____ (finish) her homework before dinner.", a: "had finished"},
+      {q: "They _____ (visit) Paris three times.", a: "have visited"},
+      {q: "By next week, I _____ (buy) a new phone.", a: "will have bought"},
+      {q: "We _____ (see) that movie before.", a: "have seen"},
+      {q: "The train _____ (leave) before we got there.", a: "had left"},
+      {q: "He _____ (study) English for two years now.", a: "has studied"},
+      {q: "By tomorrow, she _____ (complete) the project.", a: "will have completed"},
+      {q: "I _____ (just/call) my friend.", a: "have just called"},
+      {q: "They _____ (arrive) before the meeting started.", a: "had arrived"},
+      {q: "By next month, I _____ (save) enough money.", a: "will have saved"},
+      {q: "She _____ (already/finish) her lunch.", a: "has already finished"},
+      {q: "We _____ (read) the book before class.", a: "had read"},
+      {q: "He _____ (work) here for 10 years.", a: "has worked"},
+      {q: "By the end of this week, they _____ (travel) to five different cities.", a: "will have traveled"},
+      {q: "I didn't go to the concert because I _____ (already/see) that band before.", a: "had already seen"},
+      {q: "She _____ (not/finish) her homework yet, but she plans to do it tonight.", a: "has not finished"},
+      {q: "By the time we arrive, the teacher _____ (start) the lesson.", a: "will have started"},
+      {q: "By the time you graduate, how many exams _____ you _____ (take)?", a: "will have taken"},
+      {q: "If he had studied harder, he _____ (pass) the exam before summer.", a: "would have passed / had passed (conditional)"},
+      {q: "I _____ (never/see) such a beautiful place before.", a: "have never seen"},
+      {q: "They _____ (already/leave) when I called.", a: "had already left"},
+      {q: "By 2030, we _____ (complete) the renovation.", a: "will have completed"},
+      {q: "She _____ (just/finish) writing the email.", a: "has just finished"},
+      {q: "We _____ (live) here since 2015.", a: "have lived"},
+      {q: "By the time he got there, the show _____ (end).", a: "had ended"},
+      {q: "By the time I retire, I _____ (save) enough for travel.", a: "will have saved"},
+      {q: "They _____ (already/decide) the final winner before the announcement.", a: "had already decided"},
+      {q: "She _____ (complete) three marathons so far.", a: "has completed"}
+    ];
+
+    // ======= Deterministic seed from local date =======
+    function localDateString() {
+      const d = new Date();
+      // Use local year-month-day so selection changes by local date only
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    // simple hash for string -> 32-bit int
+    function cyrb128(str) {
+      let h1 = 1779033703, h2 = 3144134277, h3 = 1013904242, h4 = 2773480762;
+      for (let i = 0, k; i < str.length; i++) {
+        k = str.charCodeAt(i);
+        h1 = (h2 ^ Math.imul(h1 ^ k, 597399067)) >>> 0;
+        h2 = (h3 ^ Math.imul(h2 ^ k, 2869860233)) >>> 0;
+        h3 = (h4 ^ Math.imul(h3 ^ k, 951274213)) >>> 0;
+        h4 = (h1 ^ Math.imul(h4 ^ k, 2716044179)) >>> 0;
+      }
+      return [h1 >>> 0, h2 >>> 0, h3 >>> 0, h4 >>> 0];
+    }
+
+    // mulberry32 RNG from seed
+    function mulberry32(a) {
+      return function() {
+        var t = a += 0x6D2B79F5;
+        t = Math.imul(t ^ t >>> 15, t | 1);
+        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      }
+    }
+
+    function seededShuffle(array, seedStr) {
+      // derive a single 32-bit seed from seedStr
+      const parts = cyrb128(seedStr);
+      const seed = (parts[0] ^ parts[1] ^ parts[2] ^ parts[3]) >>> 0;
+      const rand = mulberry32(seed);
+      const arr = array.slice();
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    // ======= Render today's 10 questions =======
+    function render() {
+      const forDate = localDateString();
+      document.getElementById('forDate').textContent = forDate;
+      const shuffled = seededShuffle(bank, forDate + '-perfect-quiz');
+      const todayTen = shuffled.slice(0, 10);
+
+      const ol = document.getElementById('questionsList');
+      ol.innerHTML = '';
+      todayTen.forEach((item, idx) => {
+        const li = document.createElement('li');
+        li.innerHTML = `<div class="prompt">${item.q.replace(/</g,'&lt;')}</div>`;
+        const ans = document.createElement('div');
+        ans.className = 'answer';
+        ans.textContent = 'Answer: ' + item.a;
+        li.appendChild(ans);
+        ol.appendChild(li);
+      });
+
+      // tidy: keep answers hidden initially
+      answersVisible = false;
+      document.getElementById('toggleAnswers').textContent = 'Show Answers';
+    }
+
+    // ======= Toggle answers =======
+    let answersVisible = false;
+    document.getElementById('toggleAnswers').addEventListener('click', function () {
+      answersVisible = !answersVisible;
+      document.querySelectorAll('.answer').forEach(el => el.style.display = answersVisible ? 'block' : 'none');
+      this.textContent = answersVisible ? 'Hide Answers' : 'Show Answers';
+    });
+
+    // initial render
+    render();
+  </script>
+</body>
+</html>
